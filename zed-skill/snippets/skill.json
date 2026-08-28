@@ -1,0 +1,144 @@
+{
+  "region": {
+    "prefix": "region",
+    "body": [
+      ";region ${1:REGION NAME}",
+      "${2:your blocks of code...}",
+      ";endregion"
+    ],
+    "description": "Create a foldable region"
+  },
+  "defun": {
+    "prefix": "defun",
+    "body": [
+      "(defun ${1:funcName} (${2:params})",
+      "  ${3:body})"
+    ],
+    "description": "Define a function"
+  },
+  "procedure": {
+    "prefix": "procedure",
+    "body": [
+      "(procedure (${1:funcName} ${2:params})",
+      "  ${3:body})"
+    ],
+    "description": "Define a procedure"
+  },
+  "let": {
+    "prefix": "let",
+    "body": [
+      "(let ((${1:var} ${2:val}))",
+      "  ${3:body})"
+    ],
+    "description": "Local variable bindings"
+  },
+  "when": {
+    "prefix": "when",
+    "body": [
+      "(when ${1:test}",
+      "  ${2:body})"
+    ],
+    "description": "Conditional execution when true"
+  },
+  "unless": {
+    "prefix": "unless",
+    "body": [
+      "(unless ${1:test}",
+      "  ${2:body})"
+    ],
+    "description": "Conditional execution when false"
+  },
+  "case": {
+    "prefix": "case",
+    "body": [
+      "(case ${1:key}",
+      "  (${2:value1} ${3:body1})",
+      "  (${4:value2} ${5:body2})"
+    ],
+    "description": "Case dispatch"
+  },
+  "if": {
+    "prefix": "if",
+    "body": [
+      "(if ${1:test}",
+      "  ${2:then}",
+      "  ${3:else})"
+    ],
+    "description": "Conditional expression"
+  },
+  "else": {
+    "prefix": "else",
+    "body": [
+      "(else",
+      "  ${1:body})"
+    ],
+    "description": "Else clause"
+  },
+  "foreach": {
+    "prefix": "foreach",
+    "body": [
+      "(foreach ${1:var} ${2:list}",
+      "  ${3:body})"
+    ],
+    "description": "Iterate over list"
+  },
+  "for": {
+    "prefix": "for",
+    "body": [
+      "(for ${1:var} ${2:start} ${3:end}",
+      "  ${4:body})"
+    ],
+    "description": "Counting loop"
+  },
+  "mapcar": {
+    "prefix": "mapcar",
+    "body": [
+      "(mapcar ${1:function} ${2:list})"
+    ],
+    "description": "Map function over list"
+  },
+  "lambda": {
+    "prefix": "lambda",
+    "body": [
+      "(lambda (${1:args})",
+      "  ${2:body})"
+    ],
+    "description": "Anonymous function"
+  },
+  "cond": {
+    "prefix": "cond",
+    "body": [
+      "(cond",
+      "  (${1:test1} ${2:body1})",
+      "  (${3:test2} ${4:body2}))"
+    ],
+    "description": "Multi-branch conditional"
+  },
+  "progn": {
+    "prefix": "progn",
+    "body": [
+      "(progn",
+      "  ${1:body})"
+    ],
+    "description": "Sequential execution"
+  },
+  "while": {
+    "prefix": "while",
+    "body": [
+      "(while ${1:test}",
+      "  ${2:body})"
+    ],
+    "description": "While loop"
+  },
+  "doc": {
+    "prefix": "doc",
+    "body": [
+      ";;;",
+      ";;; @function ${1:funcName}",
+      ";;; @description ${2:description}",
+      ";;; @param ${3:param} ${4:description}",
+      ";;; @return ${5:return}"
+    ],
+    "description": "Documentation comment"
+  }
+}

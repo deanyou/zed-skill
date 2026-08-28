@@ -1,0 +1,11 @@
+# Build artifacts
+**/target/
+**/node_modules/
+
+# Generated grammar WASM (compiled by zed-extension / WASI SDK)
+zed-skill/grammars/skill.wasm
+zed-skill/extension.wasm
+zed-skill/grammars/skill/
+
+# macOS
+.DS_Store
