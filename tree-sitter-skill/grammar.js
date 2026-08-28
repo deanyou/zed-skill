@@ -26,6 +26,8 @@ module.exports = grammar({
       $.quoting,
       $.unquoting,
       $.list,
+      $.bracket_list,
+      $.brace_list,
       $.string,
       $.number,
       $.character,
@@ -40,6 +42,10 @@ module.exports = grammar({
       optional(seq('.', $._form)),
       ')',
     ),
+
+    bracket_list: $ => seq('[', repeat($._form), ']'),
+
+    brace_list: $ => seq('{', repeat($._form), '}'),
 
     quoting: $ => seq(choice("'", '`'), $._form),
 

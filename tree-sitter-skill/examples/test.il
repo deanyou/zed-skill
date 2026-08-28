@@ -23,3 +23,5 @@
 (setq neg -5 pos +2.5e3)
 (defun %localVar ()
   (car '(x y)))
+(setq arr [1 2 [3 4]])
+(setq m {a 1 b {c 2}})
