@@ -1,6 +1,6 @@
 id = "skill"
 name = "Skill"
-version = "0.1.0"
+version = "0.1.1"
 schema_version = 1
 authors = ["Dean You"]
 description = "Language support for Cadence SKILL - syntax highlighting, code completion, go to definition, hover, diagnostics, and more"
