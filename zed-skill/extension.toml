@@ -7,8 +7,9 @@ description = "Language support for Cadence SKILL - syntax highlighting, code co
 repository = "https://github.com/zed-industries/zed"
 
 [grammars.skill]
-repository = "file:///Users/dean/Documents/git/zed-skill/tree-sitter-skill"
-rev = "master"
+repository = "https://github.com/deanyou/zed-skill"
+rev = "main"
+path = "tree-sitter-skill"
 
 [language_servers.skill-lsp]
 name = "SKILL LSP"
