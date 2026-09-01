@@ -1,0 +1,76 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build skill-lsp (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            archive: skill-lsp-x86_64-linux.tar.gz
+            bin: skill-lsp
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            archive: skill-lsp-x86_64-macos.tar.gz
+            bin: skill-lsp
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            archive: skill-lsp-aarch64-macos.tar.gz
+            bin: skill-lsp
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            archive: skill-lsp-x86_64-windows.zip
+            bin: skill-lsp.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: skill-lsp
+      - name: Build
+        run: cargo build --release --target ${{ matrix.target }}
+        working-directory: skill-lsp
+      - name: Package (unix)
+        if: runner.os != 'Windows'
+        run: |
+          cp skill-lsp/target/${{ matrix.target }}/release/${{ matrix.bin }} skill-lsp-${{ matrix.bin }}
+          tar czf ${{ matrix.archive }} skill-lsp-${{ matrix.bin }}
+          shasum -a 256 ${{ matrix.archive }} >> checksums.txt
+      - name: Package (windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Copy-Item skill-lsp/target/${{ matrix.target }}/release/${{ matrix.bin }} skill-lsp-${{ matrix.bin }}
+          Compress-Archive -Path skill-lsp-${{ matrix.bin }} -DestinationPath ${{ matrix.archive }}
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.archive }}
+          path: ${{ matrix.archive }}
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            skill-lsp-*.tar.gz
+            skill-lsp-*.zip
+          generate_release_notes: true

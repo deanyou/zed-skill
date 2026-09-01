@@ -9,3 +9,7 @@ zed-skill/grammars/skill/
 
 # macOS
 .DS_Store
+
+# Compiled grammar artifacts
+**/skill.wasm
+skill-lsp/data/parse_fnd.py

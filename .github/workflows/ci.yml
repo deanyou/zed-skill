@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lsp:
+    name: skill-lsp (build & clippy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: skill-lsp
+      - name: Clippy
+        run: cargo clippy --manifest-path skill-lsp/Cargo.toml --all-targets -- -D warnings
+      - name: Build
+        run: cargo build --manifest-path skill-lsp/Cargo.toml
+
+  grammar:
+    name: tree-sitter-skill grammar (wasm32-wasi)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install WASI SDK
+        run: |
+          curl -sL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-25/wasi-sdk-25.0-x86_64-linux.tar.gz | tar xz -C /opt
+          echo "WASI_SDK_PATH=/opt/wasi-sdk-25.0" >> "$GITHUB_ENV"
+      - name: Compile parser to WASM
+        run: |
+          clang --target=wasm32-wasi \
+            -fPIC -shared -Os \
+            -Wl,--export=tree_sitter_skill \
+            -o /tmp/skill.wasm \
+            -I tree-sitter-skill/src tree-sitter-skill/src/parser.c
+          test -s /tmp/skill.wasm
+
+  validate-api-data:
+    name: Validate embedded API data
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -c "import json; d=json.load(open('skill-lsp/data/skill_api.json')); fns=d['functions']; assert d['version']==1; names=[f['name'] for f in fns]; assert names==sorted(names)==list(dict.fromkeys(names)); assert all(f['signature'] for f in fns); print(f'{len(fns)} functions OK')"

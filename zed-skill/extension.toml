@@ -1,10 +1,18 @@
 id = "skill"
 name = "Skill"
-version = "0.1.1"
+version = "0.2.0"
 schema_version = 1
-authors = ["Dean You"]
 description = "Language support for Cadence SKILL - syntax highlighting, code completion, go to definition, hover, diagnostics, and more"
 repository = "https://github.com/deanyou/zed-skill"
+authors = ["Dean You"]
+themes = []
+icon_themes = []
+languages = ["languages/skill"]
+capabilities = []
+
+[lib]
+kind = "Rust"
+version = "0.7.0"
 
 [grammars.skill]
 repository = "https://github.com/deanyou/zed-skill"
@@ -12,5 +20,10 @@ rev = "main"
 path = "tree-sitter-skill"
 
 [language_servers.skill-lsp]
-name = "SKILL LSP"
 languages = ["Skill"]
+
+[language_servers.skill-lsp.language_ids]
+
+[context_servers]
+
+[slash_commands]

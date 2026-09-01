@@ -15,13 +15,18 @@ Zed 编辑器的 **Cadence SKILL** 语言扩展 —— SKILL 是 Cadence Virtuos
 
 - 语法高亮：特殊形式（`defun` `let` `foreach` …）、内建函数（`car` `mapcar` `printf`、`db*`/`ge*`/`hi*` API）、引号语法（`'` `` ` `` `,` `,@`）、块注释、`?keywords`、点对（dotted pairs）
 - 彩虹括号与配对括号高亮，支持 `()` `[]` `{}`
-- 代码补全：100+ 内建函数、用户自定义函数、代码片段
-- 悬停文档、跳转定义、查找引用、文档符号
+- 代码补全：**9,600+ 官方 API 函数**（从 Cadence IC23.1 官方参考文档提取）、100+ 核心内建函数、用户自定义函数、代码片段
+- 悬停文档：含官方 API 签名与描述
+- 跳转定义、查找引用、文档符号、工作区符号
+- 重命名符号、文档高亮、签名帮助、格式化
+- 括号内自动缩进、代码折叠、大纲（outline）、扩选
 - 诊断：括号不配对、引号不匹配
 
 ## 快速安装
 
-需要先安装 [Rust](https://rustup.rs)。
+**方式 A —— 预编译二进制**（推荐）：从 [GitHub Releases](https://github.com/deanyou/zed-skill/releases) 下载对应平台的 `skill-lsp-*.tar.gz` / `.zip`，解压后放入 `PATH`。
+
+**方式 B —— 源码编译**（需先安装 [Rust](https://rustup.rs)）：
 
 ```bash
 # 1. 克隆仓库
@@ -32,13 +37,12 @@ cd zed-skill
 cargo install --path skill-lsp
 # macOS / Linux → ~/.cargo/bin/skill-lsp
 # Windows       → %USERPROFILE%\.cargo\bin\skill-lsp.exe
-
-# 3. 在 Zed 中安装扩展
-#    Zed → Extensions（macOS: cmd-shift-x，其他平台: ctrl-shift-x）
-#    → Install Dev Extension → 选择本仓库的 `zed-skill/` 目录
 ```
 
-Zed 首次会自动编译扩展，完成后打开任意 `.il` 文件即可。
+**3. 在 Zed 中安装扩展**
+Zed → Extensions（macOS: `cmd-shift-x`，其他平台: `ctrl-shift-x`）→ **Install Dev Extension** → 选择本仓库的 `zed-skill/` 目录。
+
+首次会自动编译扩展，完成后打开任意 `.il` 文件即可。
 
 > 正式发布中：[zed-industries/extensions PR](https://github.com/zed-industries/extensions/pull/7377)。合并后可直接在 Zed 的 Extensions 面板搜索 "skill" 安装。
 

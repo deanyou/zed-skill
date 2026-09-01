@@ -6,6 +6,7 @@ use tower_lsp::lsp_types::*;
 
 use crate::{Document, SymbolInfo};
 
+#[allow(deprecated)]
 pub fn extract_symbols(content: &str, uri: &Url) -> Vec<SymbolInfo> {
     let mut symbols = Vec::new();
 
@@ -116,6 +117,7 @@ pub async fn goto_definition(
     None
 }
 
+#[allow(deprecated)]
 pub async fn get_document_symbols(
     symbol_table: &Arc<RwLock<HashMap<String, SymbolInfo>>>,
     uri: &Url,
@@ -197,6 +199,15 @@ pub async fn find_references(
 }
 
 fn get_word_at_position(rope: &ropey::Rope, position: Position) -> Option<String> {
+    let (start, end, line) = word_range_at_position(rope, position)?;
+    Some(line.slice(start..end).to_string())
+}
+
+/// Char offsets (within the line) of the word under the cursor, plus the line.
+pub fn word_range_at_position(
+    rope: &ropey::Rope,
+    position: Position,
+) -> Option<(usize, usize, ropey::RopeSlice<'_>)> {
     let line = rope.line(position.line as usize);
     let char_pos = std::cmp::min(position.character as usize, line.len_chars());
 
@@ -222,8 +233,71 @@ fn get_word_at_position(rope: &ropey::Rope, position: Position) -> Option<String
     }
 
     if start < end {
-        Some(line.slice(start..end).to_string())
+        Some((start, end, line))
     } else {
         None
     }
+}
+
+fn is_word_char(c: char) -> bool {
+    c.is_alphanumeric() || c == '-' || c == '_' || c == '?' || c == '!'
+}
+
+/// All word-boundary occurrences of `word` in `text`, char-based positions.
+pub fn occurrences_in_text(text: &str, word: &str) -> Vec<Range> {
+    let mut ranges = Vec::new();
+    if word.is_empty() {
+        return ranges;
+    }
+    let needle: Vec<char> = word.chars().collect();
+    for (line_idx, line) in text.lines().enumerate() {
+        let line_chars: Vec<char> = line.chars().collect();
+        if line_chars.len() < needle.len() {
+            continue;
+        }
+        for i in 0..=(line_chars.len() - needle.len()) {
+            if line_chars[i..].starts_with(&needle[..]) {
+                let before_ok = i == 0 || !is_word_char(line_chars[i - 1]);
+                let end = i + needle.len();
+                let after_ok =
+                    end == line_chars.len() || !is_word_char(line_chars[end]);
+                if before_ok && after_ok {
+                    ranges.push(Range {
+                        start: Position {
+                            line: line_idx as u32,
+                            character: i as u32,
+                        },
+                        end: Position {
+                            line: line_idx as u32,
+                            character: end as u32,
+                        },
+                    });
+                }
+            }
+        }
+    }
+    ranges
+}
+
+#[allow(deprecated)]
+pub async fn search_workspace_symbols(
+    symbol_table: &Arc<RwLock<HashMap<String, SymbolInfo>>>,
+    query: &str,
+) -> Vec<SymbolInformation> {
+    let q = query.to_lowercase();
+    let table = symbol_table.read().await;
+    let mut symbols: Vec<SymbolInformation> = table
+        .values()
+        .filter(|info| q.is_empty() || info.name.to_lowercase().contains(&q))
+        .map(|info| SymbolInformation {
+            name: info.name.clone(),
+            kind: info.kind,
+            tags: None,
+            deprecated: None,
+            location: info.location.clone(),
+            container_name: None,
+        })
+        .collect();
+    symbols.sort_by(|a, b| a.name.cmp(&b.name));
+    symbols
 }

@@ -4,7 +4,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use tower_lsp::lsp_types::*;
 
-use crate::{Document, SymbolInfo};
+use crate::{api, Document, SymbolInfo};
 
 const SKILL_DOCS: &[(&str, &str)] = &[
     ("defun", "**defun** - Define a new function\n\n```skill\n(defun name (params...) body...)\n```\n\nCreates a new function with the given name, parameters, and body."),
@@ -83,6 +83,24 @@ pub async fn get_hover(
                 range: None,
             });
         }
+    }
+
+    // Official API reference (generated from Cadence IC23.1 .fnd docs)
+    if let Some(f) = api::index().get(&word) {
+        let mut content = format!(
+            "**{}**\n\n*{} / {}*\n\n```skill\n{}\n```",
+            f.name, f.category, f.module, f.signature
+        );
+        if !f.description.is_empty() {
+            content.push_str(&format!("\n\n{}", f.description));
+        }
+        return Some(Hover {
+            contents: HoverContents::Markup(MarkupContent {
+                kind: MarkupKind::Markdown,
+                value: content,
+            }),
+            range: None,
+        });
     }
 
     let symbols = symbol_table.read().await;

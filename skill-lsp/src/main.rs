@@ -7,6 +7,7 @@ use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer, LspService, Server};
 
+mod api;
 mod completion;
 mod diagnostics;
 mod hover;
@@ -72,7 +73,12 @@ impl LanguageServer for Backend {
                 ..Default::default()
             }),
             document_formatting_provider: Some(OneOf::Left(true)),
-            rename_provider: Some(OneOf::Left(true)),
+            rename_provider: Some(OneOf::Right(RenameOptions {
+                prepare_provider: Some(true),
+                work_done_progress_options: Default::default(),
+            })),
+            document_highlight_provider: Some(OneOf::Left(true)),
+            workspace_symbol_provider: Some(OneOf::Left(true)),
             code_action_provider: Some(CodeActionProviderCapability::Simple(true)),
             execute_command_provider: Some(ExecuteCommandOptions {
                 commands: vec!["skill.addDocComment".to_string()],
@@ -230,6 +236,119 @@ impl LanguageServer for Backend {
         Ok(Some(edits))
     }
 
+    async fn document_highlight(
+        &self,
+        params: DocumentHighlightParams,
+    ) -> Result<Option<Vec<DocumentHighlight>>> {
+        let uri = params.text_document_position_params.text_document.uri;
+        let position = params.text_document_position_params.position;
+
+        let mut highlights = Vec::new();
+        if let Some(doc) = self.documents.get(&uri) {
+            let doc = doc.read().await;
+            if let Some((start, end, line)) = symbols::word_range_at_position(&doc.rope, position) {
+                let word = line.slice(start..end).to_string();
+                highlights = symbols::occurrences_in_text(&doc.rope.to_string(), &word)
+                    .into_iter()
+                    .map(|range| DocumentHighlight {
+                        range,
+                        kind: Some(DocumentHighlightKind::TEXT),
+                    })
+                    .collect();
+            }
+        }
+
+        Ok(if highlights.is_empty() {
+            None
+        } else {
+            Some(highlights)
+        })
+    }
+
+    async fn prepare_rename(
+        &self,
+        params: TextDocumentPositionParams,
+    ) -> Result<Option<PrepareRenameResponse>> {
+        let uri = params.text_document.uri;
+        let position = params.position;
+
+        if let Some(doc) = self.documents.get(&uri) {
+            let doc = doc.read().await;
+            if let Some((start, end, line)) = symbols::word_range_at_position(&doc.rope, position) {
+                let word = line.slice(start..end).to_string();
+                return Ok(Some(PrepareRenameResponse::RangeWithPlaceholder {
+                    range: Range {
+                        start: Position {
+                            line: position.line,
+                            character: start as u32,
+                        },
+                        end: Position {
+                            line: position.line,
+                            character: end as u32,
+                        },
+                    },
+                    placeholder: word,
+                }));
+            }
+        }
+        Ok(None)
+    }
+
+    async fn rename(&self, params: RenameParams) -> Result<Option<WorkspaceEdit>> {
+        let uri = params.text_document_position.text_document.uri;
+        let position = params.text_document_position.position;
+        let new_name = params.new_name;
+
+        // Must be a valid SKILL symbol
+        if new_name.is_empty()
+            || !new_name
+                .chars()
+                .all(|c| c.is_alphanumeric() || c == '-' || c == '_' || c == '?' || c == '!')
+        {
+            return Ok(None);
+        }
+
+        let Some(doc) = self.documents.get(&uri) else {
+            return Ok(None);
+        };
+        let doc = doc.read().await;
+        let Some((start, end, line)) = symbols::word_range_at_position(&doc.rope, position) else {
+            return Ok(None);
+        };
+        let word = line.slice(start..end).to_string();
+
+        let edits: Vec<TextEdit> = symbols::occurrences_in_text(&doc.rope.to_string(), &word)
+            .into_iter()
+            .map(|range| TextEdit {
+                range,
+                new_text: new_name.clone(),
+            })
+            .collect();
+
+        if edits.is_empty() {
+            return Ok(None);
+        }
+
+        let mut changes = HashMap::new();
+        changes.insert(uri.clone(), edits);
+        Ok(Some(WorkspaceEdit {
+            changes: Some(changes),
+            ..Default::default()
+        }))
+    }
+
+    async fn symbol(
+        &self,
+        params: WorkspaceSymbolParams,
+    ) -> Result<Option<Vec<SymbolInformation>>> {
+        let symbols = symbols::search_workspace_symbols(&self.symbol_table, &params.query).await;
+        Ok(if symbols.is_empty() {
+            None
+        } else {
+            Some(symbols)
+        })
+    }
+
     async fn code_action(&self, params: CodeActionParams) -> Result<Option<CodeActionResponse>> {
         let uri = params.text_document.uri;
         let range = params.range;
@@ -251,7 +370,7 @@ impl LanguageServer for Backend {
                         command: "skill.addDocComment".to_string(),
                         arguments: Some(vec![
                             serde_json::to_value(&uri).unwrap(),
-                            serde_json::to_value(&range.start.line).unwrap(),
+                            serde_json::to_value(range.start.line).unwrap(),
                         ]),
                     }),
                     ..Default::default()
@@ -264,16 +383,13 @@ impl LanguageServer for Backend {
     }
 
     async fn execute_command(&self, params: ExecuteCommandParams) -> Result<Option<serde_json::Value>> {
-        match params.command.as_str() {
-            "skill.addDocComment" => {
-                let args = params.arguments;
-                if let (Some(uri_val), Some(line_val)) = (args.first(), args.get(1)) {
-                    let uri: Url = serde_json::from_value(uri_val.clone()).unwrap();
-                    let line: u32 = serde_json::from_value(line_val.clone()).unwrap();
-                    self.add_documentation_comment(&uri, line).await;
-                }
+        if params.command.as_str() == "skill.addDocComment" {
+            let args = params.arguments;
+            if let (Some(uri_val), Some(line_val)) = (args.first(), args.get(1)) {
+                let uri: Url = serde_json::from_value(uri_val.clone()).unwrap();
+                let line: u32 = serde_json::from_value(line_val.clone()).unwrap();
+                self.add_documentation_comment(&uri, line).await;
             }
-            _ => {}
         }
         Ok(None)
     }
@@ -356,6 +472,10 @@ async fn main() {
         .with_max_level(tracing::Level::INFO)
         .with_writer(std::io::stderr)
         .init();
+
+    // Load the embedded API index once at startup
+    api::init();
+    tracing::info!("SKILL API index loaded: {} functions", api::index().len());
 
     let stdin = tokio::io::stdin();
     let stdout = tokio::io::stdout();

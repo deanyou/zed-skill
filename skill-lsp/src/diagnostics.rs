@@ -25,15 +25,16 @@ pub async fn get_diagnostics(
 
 fn check_syntax_errors(content: &str, diagnostics: &mut Vec<Diagnostic>) {
     let lines: Vec<&str> = content.lines().collect();
+    let defun_re = regex::Regex::new(r"\((?:defun|procedure)\s+\(([^)]*)\)").unwrap();
 
     for (line_num, line) in lines.iter().enumerate() {
         let trimmed = line.trim();
 
-        if trimmed.starts_with("(defun") || trimmed.starts_with("(procedure") {
-            let re = regex::Regex::new(r"\((?:defun|procedure)\s+\(([^)]*)\)").unwrap();
-            if !re.is_match(trimmed) && !trimmed.ends_with(')') {
-                continue;
-            }
+        if (trimmed.starts_with("(defun") || trimmed.starts_with("(procedure"))
+            && !defun_re.is_match(trimmed)
+            && !trimmed.ends_with(')')
+        {
+            continue;
         }
 
         let quote_count = trimmed.matches('"').count();
@@ -71,10 +72,9 @@ fn check_syntax_errors(content: &str, diagnostics: &mut Vec<Diagnostic>) {
 fn check_unbalanced_parens(content: &str, diagnostics: &mut Vec<Diagnostic>) {
     let mut stack: Vec<(usize, usize)> = Vec::new();
     let mut in_string = false;
-    let mut in_comment = false;
 
     for (line_num, line) in content.lines().enumerate() {
-        in_comment = false;
+        let mut in_comment = false;
         for (col, c) in line.char_indices() {
             if in_comment {
                 break;

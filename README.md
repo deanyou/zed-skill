@@ -15,13 +15,18 @@ Zed editor extension for **Cadence SKILL** — the Lisp-based scripting language
 
 - Syntax highlighting: special forms (`defun` `let` `foreach` …), built-ins (`car` `mapcar` `printf`, `db*`/`ge*`/`hi*` APIs), quoting (`'` `` ` `` `,` `,@`), block comments, `?keywords`, dotted pairs
 - Rainbow brackets & matched-bracket highlight for `()` `[]` `{}`
-- Completion: 100+ built-ins, user-defined functions, snippets
-- Hover docs, go to definition, find references, document symbols
+- Completion: **9,600+ official API functions** (extracted from Cadence IC23.1 reference docs), 100+ core built-ins, user-defined functions, snippets
+- Hover docs with official API signatures & descriptions
+- Go to definition, find references, document symbols, workspace symbols
+- Rename symbol, document highlight, signature help, formatting
+- Auto-indent inside brackets, code folding, outline, expand selection
 - Diagnostics: unbalanced parens, unmatched quotes
 
 ## Quick Install
 
-Requires [Rust](https://rustup.rs).
+**Option A — prebuilt binary** (recommended): download `skill-lsp-*.tar.gz` / `.zip` for your platform from [GitHub Releases](https://github.com/deanyou/zed-skill/releases), extract, and put it on `PATH`.
+
+**Option B — build from source** (requires [Rust](https://rustup.rs)):
 
 ```bash
 # 1. Clone
@@ -32,11 +37,10 @@ cd zed-skill
 cargo install --path skill-lsp
 # macOS / Linux → ~/.cargo/bin/skill-lsp
 # Windows      → %USERPROFILE%\.cargo\bin\skill-lsp.exe
-
-# 3. Install the extension in Zed
-#    Zed → Extensions (cmd-shift-x on macOS, ctrl-shift-x elsewhere)
-#    → Install Dev Extension → select the `zed-skill/` directory of this repo
 ```
+
+**3. Install the extension in Zed**
+Zed → Extensions (`cmd-shift-x` on macOS, `ctrl-shift-x` elsewhere) → **Install Dev Extension** → select the `zed-skill/` directory of this repo.
 
 After Zed compiles the extension (first time only), open any `.il` file.
 

@@ -4,7 +4,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use tower_lsp::lsp_types::*;
 
-use crate::{Document, SymbolInfo};
+use crate::{api, Document, SymbolInfo};
 
 const SKILL_BUILTINS: &[(&str, &str, &str)] = &[
     ("car", "(car list)", "Returns the first element of a list"),
@@ -149,6 +149,18 @@ const ALLEGRO_SKILL_FUNCTIONS: &[(&str, &str, &str)] = &[
     ("leaClose", "(cellView)", "Close LEA cell view"),
 ];
 
+fn word_prefix(line_prefix: &str) -> String {
+    let mut out = String::new();
+    for c in line_prefix.chars().rev() {
+        if c.is_alphanumeric() || c == '-' || c == '_' || c == '?' || c == '!' {
+            out.insert(0, c);
+        } else {
+            break;
+        }
+    }
+    out
+}
+
 pub async fn get_completions(
     documents: &Arc<DashMap<Url, RwLock<Document>>>,
     symbol_table: &Arc<RwLock<HashMap<String, SymbolInfo>>>,
@@ -168,6 +180,47 @@ pub async fn get_completions(
     };
 
     let is_function_call = prefix.trim_end().ends_with('(') || prefix.trim_end().ends_with("(");
+
+    // Word being typed right now (used to filter the 9k+ API functions).
+    let word_prefix = word_prefix(&prefix);
+
+    let mut seen: std::collections::HashSet<String> = SKILL_BUILTINS
+        .iter()
+        .chain(ALLEGRO_SKILL_FUNCTIONS.iter())
+        .map(|(name, _, _)| name.to_lowercase())
+        .collect();
+
+    // Official API functions (IC23.1 .fnd reference), prefix-filtered.
+    for func in api::index().completions(&word_prefix, 100) {
+        if !seen.insert(func.name.to_lowercase()) {
+            continue; // already covered by the built-in tables above
+        }
+        let doc_value = if func.description.is_empty() {
+            format!("**{}**\n\n*{} / {}*", func.name, func.category, func.module)
+        } else {
+            format!(
+                "**{}**\n\n*{} / {}*\n\n{}",
+                func.name, func.category, func.module, func.description
+            )
+        };
+        items.push(CompletionItem {
+            label: func.name.clone(),
+            kind: Some(CompletionItemKind::FUNCTION),
+            detail: Some(func.signature.clone()),
+            documentation: Some(Documentation::MarkupContent(MarkupContent {
+                kind: MarkupKind::Markdown,
+                value: doc_value,
+            })),
+            insert_text: Some(if is_function_call {
+                func.name.clone()
+            } else {
+                format!("({}", func.name)
+            }),
+            insert_text_format: Some(InsertTextFormat::PLAIN_TEXT),
+            sort_text: Some(format!("01_{}", func.name)),
+            ..Default::default()
+        });
+    }
 
     for (name, signature, description) in SKILL_BUILTINS {
         let item = CompletionItem {
@@ -293,6 +346,9 @@ pub async fn get_signature_help(
                 .iter()
                 .find(|(name, _, _)| *name == func_name)
                 .map(|(_, sig, _)| sig.to_string())
+        })
+        .or_else(|| {
+            api::index().get(func_name).map(|f| f.signature.clone())
         })
         .or_else(|| {
             let symbols = symbol_table.blocking_read();
