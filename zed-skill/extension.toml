@@ -1,6 +1,6 @@
 id = "skill"
 name = "Skill"
-version = "0.2.0"
+version = "0.2.1"
 schema_version = 1
 description = "Language support for Cadence SKILL - syntax highlighting, code completion, go to definition, hover, diagnostics, and more"
 repository = "https://github.com/deanyou/zed-skill"

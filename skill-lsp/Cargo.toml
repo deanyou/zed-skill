@@ -1,6 +1,6 @@
 [package]
 name = "skill-lsp"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 authors = ["CatPaw <catpaw@meituan.com>"]
 description = "Language Server Protocol implementation for Cadence SKILL"

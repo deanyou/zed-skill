@@ -114,6 +114,24 @@ Optional — rainbow brackets (colors follow the theme `accents`):
   ```
 - **No completion/hover**: check that `skill-lsp` resolves in `PATH` (`which skill-lsp` / `Get-Command skill-lsp`), or set `lsp.skill-lsp.binary.path` as above. Restart Zed after installing the binary.
 
+## Changelog
+
+### 0.2.1
+
+- Fixed hover/signature lookup for mixed-case API functions (e.g. `getShellEnvVar`)
+- UTF-8 position encoding — correct offsets on lines with CJK comments
+- Signature help: innermost call detection, space-separated argument index
+- Diagnostics: no false positives from `/* */` comments, escaped quotes, or cross-line string state
+- Auto-indent & code folding now actually active (fixed Zed `indents.scm` captures)
+- Grammar revision pinned to a full commit SHA
+
+### 0.2.0
+
+- **9,600+ official API functions** in completion & hover (generated from Cadence IC23.1 `.fnd` reference docs)
+- Rename symbol, workspace symbols, document highlight, signature help
+- Auto-indent, code folding, outline, expand selection; extension icon
+- CI + prebuilt binaries on GitHub Releases
+
 ## License
 
 [MIT](LICENSE)

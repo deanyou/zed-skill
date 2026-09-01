@@ -114,6 +114,24 @@ settings.json 文件位置：
   ```
 - **无补全/悬停**：确认 `skill-lsp` 在 `PATH` 中（`which skill-lsp` / `Get-Command skill-lsp`），或按上文设置 `lsp.skill-lsp.binary.path`。安装二进制后需重启 Zed。
 
+## 更新日志
+
+### 0.2.1
+
+- 修复混合大小写 API 函数（如 `getShellEnvVar`）的悬停/签名查找
+- UTF-8 位置编码——含中文注释的行列偏移不再错位
+- 签名帮助：内层嵌套调用识别、空格分隔参数索引
+- 诊断：`/* */` 块注释、转义引号、跨行字符串状态不再误报
+- 自动缩进与代码折叠真正生效（修正 Zed `indents.scm` capture 约定）
+- grammar 版本锁定到完整 commit SHA
+
+### 0.2.0
+
+- 补全与悬停文档内置 **9,600+ 官方 API 函数**（从 Cadence IC23.1 `.fnd` 参考文档生成）
+- 重命名符号、工作区符号、文档高亮、签名帮助
+- 自动缩进、代码折叠、大纲、扩选；扩展图标
+- CI + GitHub Releases 预编译二进制
+
 ## 许可证
 
 [MIT](LICENSE)
