@@ -41,7 +41,7 @@ pub fn index() -> &'static ApiIndex {
         let mut names_lower = Vec::with_capacity(data.functions.len());
         for f in data.functions {
             names_lower.push(f.name.to_lowercase());
-            by_name.insert(f.name.clone(), f);
+            by_name.insert(f.name.to_lowercase(), f);
         }
         names_lower.sort();
         names_lower.dedup();
