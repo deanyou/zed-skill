@@ -66,12 +66,9 @@ pub async fn get_hover(
     uri: &Url,
     position: Position,
 ) -> Option<Hover> {
-    let word = if let Some(doc) = documents.get(uri) {
-        let doc = doc.read().await;
-        get_word_at_position(&doc.rope, position)?
-    } else {
-        return None;
-    };
+    let doc = documents.get(uri)?;
+    let doc = doc.read().await;
+    let word = get_word_at_position(&doc.rope, position)?;
 
     for (name, doc) in SKILL_DOCS {
         if *name == word {

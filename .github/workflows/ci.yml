@@ -33,7 +33,7 @@ jobs:
           echo "WASI_SDK_PATH=/opt/wasi-sdk-25.0" >> "$GITHUB_ENV"
       - name: Compile parser to WASM
         run: |
-          clang --target=wasm32-wasi \
+          "${WASI_SDK_PATH}/bin/clang" --target=wasm32-wasi \
             -fPIC -shared -Os \
             -Wl,--export=tree_sitter_skill \
             -o /tmp/skill.wasm \

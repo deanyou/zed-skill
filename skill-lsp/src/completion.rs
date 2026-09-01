@@ -313,14 +313,11 @@ pub async fn get_signature_help(
     uri: &Url,
     position: Position,
 ) -> Option<SignatureHelp> {
-    let text = if let Some(doc) = documents.get(uri) {
-        let doc = doc.read().await;
-        let line = doc.rope.line(position.line as usize);
-        let char_pos = std::cmp::min(position.character as usize, line.len_chars());
-        line.slice(0..char_pos).to_string()
-    } else {
-        return None;
-    };
+    let doc = documents.get(uri)?;
+    let doc = doc.read().await;
+    let line = doc.rope.line(position.line as usize);
+    let char_pos = std::cmp::min(position.character as usize, line.len_chars());
+    let text = line.slice(0..char_pos).to_string();
 
     let re = regex::Regex::new(r"\((\w+)\s*").ok()?;
     let caps = re.captures(&text)?;
