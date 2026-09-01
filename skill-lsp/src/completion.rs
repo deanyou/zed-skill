@@ -179,8 +179,6 @@ pub async fn get_completions(
         String::new()
     };
 
-    let is_function_call = prefix.trim_end().ends_with('(') || prefix.trim_end().ends_with("(");
-
     // Word being typed right now (used to filter the 9k+ API functions).
     let word_prefix = word_prefix(&prefix);
 
@@ -211,11 +209,7 @@ pub async fn get_completions(
                 kind: MarkupKind::Markdown,
                 value: doc_value,
             })),
-            insert_text: Some(if is_function_call {
-                func.name.clone()
-            } else {
-                format!("({}", func.name)
-            }),
+            insert_text: Some(func.name.clone()),
             insert_text_format: Some(InsertTextFormat::PLAIN_TEXT),
             sort_text: Some(format!("01_{}", func.name)),
             ..Default::default()
@@ -231,11 +225,7 @@ pub async fn get_completions(
                 kind: MarkupKind::Markdown,
                 value: format!("**{}**\n\n{}", name, description),
             })),
-            insert_text: Some(if is_function_call {
-                name.to_string()
-            } else {
-                format!("({}", name)
-            }),
+            insert_text: Some(name.to_string()),
             insert_text_format: Some(InsertTextFormat::PLAIN_TEXT),
             ..Default::default()
         };
@@ -251,11 +241,7 @@ pub async fn get_completions(
                 kind: MarkupKind::Markdown,
                 value: format!("**{}** (Allegro SKILL)\n\n{}", name, description),
             })),
-            insert_text: Some(if is_function_call {
-                name.to_string()
-            } else {
-                format!("({}", name)
-            }),
+            insert_text: Some(name.to_string()),
             insert_text_format: Some(InsertTextFormat::PLAIN_TEXT),
             ..Default::default()
         };
@@ -293,11 +279,7 @@ pub async fn get_completions(
                 kind: MarkupKind::Markdown,
                 value: doc,
             })),
-            insert_text: Some(if is_function_call {
-                name.clone()
-            } else {
-                format!("({}", name)
-            }),
+            insert_text: Some(name.clone()),
             insert_text_format: Some(InsertTextFormat::PLAIN_TEXT),
             ..Default::default()
         };
@@ -319,19 +301,49 @@ pub async fn get_signature_help(
     let char_pos = std::cmp::min(position.character as usize, line.len_chars());
     let text = line.slice(0..char_pos).to_string();
 
-    let re = regex::Regex::new(r"\((\w+)\s*").ok()?;
-    let caps = re.captures(&text)?;
-    let func_name = caps.get(1)?.as_str();
+    let re = regex::Regex::new(r"\(([\w?!-]+)\s*").ok()?;
+    // Innermost open paren: the last '(' not yet closed.
+    let func_name = re
+        .captures_iter(&text)
+        .filter_map(|c| c.get(1))
+        .filter(|m| {
+            let paren = m.start() - 1; // position of '(' before the name
+            let opens = text[..paren].matches('(').count();
+            let closes = text[..paren].matches(')').count();
+            opens >= closes // unclosed at this point
+        })
+        .last()
+        .map(|m| m.as_str().to_string())?;
 
-    let open_parens = text.matches('(').count();
-    let close_parens = text.matches(')').count();
-    let arg_count = if open_parens > close_parens {
-        text.rfind('(').map(|pos| {
+    // SKILL args are space-separated. Words after the innermost '(' include the
+    // function name; a partial word under the cursor counts as the active arg.
+    let arg_count = text
+        .rfind('(')
+        .filter(|_| text.matches('(').count() > text.matches(')').count())
+        .map(|pos| {
             let after_paren = &text[pos + 1..];
-            after_paren.matches(',').count()
-        })?
-    } else {
-        return None;
+            let words = after_paren.split_whitespace().count();
+            let mid_word = after_paren
+                .chars()
+                .last()
+                .is_some_and(|c| !c.is_whitespace());
+            if mid_word {
+                words.saturating_sub(2)
+            } else {
+                words.saturating_sub(1)
+            }
+        })
+        .unwrap_or(0);
+
+    let user_signature = {
+        let symbols = symbol_table.read().await;
+        symbols
+            .get(&func_name)
+            .and_then(|info| {
+                info.parameters
+                    .as_ref()
+                    .map(|params| format!("({} {})", func_name, params.join(" ")))
+            })
     };
 
     let signature = SKILL_BUILTINS
@@ -345,16 +357,9 @@ pub async fn get_signature_help(
                 .map(|(_, sig, _)| sig.to_string())
         })
         .or_else(|| {
-            api::index().get(func_name).map(|f| f.signature.clone())
+            api::index().get(&func_name).map(|f| f.signature.clone())
         })
-        .or_else(|| {
-            let symbols = symbol_table.blocking_read();
-            symbols.get(func_name).and_then(|info| {
-                info.parameters.as_ref().map(|params| {
-                    format!("({} {})", func_name, params.join(" "))
-                })
-            })
-        })?;
+        .or(user_signature)?;
 
     Some(SignatureHelp {
         signatures: vec![SignatureInformation {

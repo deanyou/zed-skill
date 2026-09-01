@@ -1,16 +1,14 @@
-; Outline / symbol list for Cadence SKILL
+; Outline / symbol list for Cadence SKILL (Zed captures: @item, @context, @name)
 
 ((list
    .
-   (symbol) @_def
+   (symbol) @context
    (symbol) @name) @item
- (#any-of? @_def "defun" "defmacro" "procedure")
- (#set! "kind" "function"))
+ (#any-of? @context "defun" "defmacro" "procedure"))
 
 ; Top-level variable definitions
 ((list
    .
-   (symbol) @_def
+   (symbol) @context
    (symbol) @name) @item
- (#any-of? @_def "setq" "defvar" "defglobal")
- (#set! "kind" "variable"))
+ (#any-of? @context "setq" "setf"))

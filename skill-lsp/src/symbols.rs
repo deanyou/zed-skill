@@ -10,13 +10,16 @@ use crate::{Document, SymbolInfo};
 pub fn extract_symbols(content: &str, uri: &Url) -> Vec<SymbolInfo> {
     let mut symbols = Vec::new();
 
-    let func_re = regex::Regex::new(r"\((?:defun|procedure)\s+(\w+)\s*\(([^)]*)\)").unwrap();
+    let func_re = regex::Regex::new(r"\((?:defun|procedure)\s+([\w?!-]+)\s*\(([^)]*)\)").unwrap();
 
     for (line_num, line) in content.lines().enumerate() {
-        if let Some(caps) = func_re.captures(line) {
-            let name = caps.get(1).unwrap().as_str().to_string();
-            let params_str = caps.get(2).map(|m| m.as_str()).unwrap_or("");
-
+        // Skip definitions inside line comments / strings
+        if let Some(comment_start) = line_comment_offset(line) {
+            if regex_find_name(&func_re, &line[..comment_start]).is_none() {
+                continue;
+            }
+        }
+        if let Some((name, params_str, name_start)) = regex_find_name(&func_re, line) {
             let parameters = if params_str.trim().is_empty() {
                 None
             } else {
@@ -28,8 +31,6 @@ pub fn extract_symbols(content: &str, uri: &Url) -> Vec<SymbolInfo> {
                 )
             };
 
-            let name_start = line.find(&name).unwrap_or(0);
-
             let location = Location {
                 uri: uri.clone(),
                 range: Range {
@@ -39,7 +40,7 @@ pub fn extract_symbols(content: &str, uri: &Url) -> Vec<SymbolInfo> {
                     },
                     end: Position {
                         line: line_num as u32,
-                        character: (name_start + name.len()) as u32,
+                        character: (name_start + name.chars().count()) as u32,
                     },
                 },
             };
@@ -58,6 +59,43 @@ pub fn extract_symbols(content: &str, uri: &Url) -> Vec<SymbolInfo> {
     }
 
     symbols
+}
+
+/// Find `(defun|procedure NAME (PARAMS)` in `text`; returns char-based name column.
+fn regex_find_name(
+    re: &regex::Regex,
+    text: &str,
+) -> Option<(String, String, usize)> {
+    let caps = re.captures(text)?;
+    let m = caps.get(1)?;
+    let name = m.as_str().to_string();
+    let params_str = caps.get(2).map(|mm| mm.as_str()).unwrap_or("").to_string();
+    let name_start = text[..m.start()].chars().count();
+    Some((name, params_str, name_start))
+}
+
+/// Byte offset of a line comment start (`;` outside strings), if any.
+fn line_comment_offset(line: &str) -> Option<usize> {
+    let mut in_string = false;
+    for (i, c) in line.char_indices() {
+        match c {
+            '"' if !is_escaped_byte(line, i) => in_string = !in_string,
+            ';' if !in_string => return Some(i),
+            _ => {}
+        }
+    }
+    None
+}
+
+fn is_escaped_byte(line: &str, byte: usize) -> bool {
+    let bytes = line.as_bytes();
+    let mut n = 0;
+    let mut i = byte;
+    while i > 0 && bytes[i - 1] == b'\\' {
+        n += 1;
+        i -= 1;
+    }
+    n % 2 == 1
 }
 
 fn extract_preceding_comment(content: &str, line_num: u32) -> Option<String> {
@@ -161,34 +199,13 @@ pub async fn find_references(
         let doc = item.value().read().await;
         let content = doc.rope.to_string();
 
-        for (line_num, line) in content.lines().enumerate() {
-            for (col, _) in line.char_indices() {
-                if line[col..].starts_with(&word) {
-                    let before = col.checked_sub(1).and_then(|i| line.chars().nth(i));
-                    let after = line[col + word.len()..].chars().next();
-
-                    let is_word_boundary = |c: Option<char>| {
-                        c.map(|ch| !ch.is_alphanumeric() && ch != '-' && ch != '_')
-                            .unwrap_or(true)
-                    };
-
-                    if is_word_boundary(before) && is_word_boundary(after) {
-                        locations.push(Location {
-                            uri: doc_uri.clone(),
-                            range: Range {
-                                start: Position {
-                                    line: line_num as u32,
-                                    character: col as u32,
-                                },
-                                end: Position {
-                                    line: line_num as u32,
-                                    character: (col + word.len()) as u32,
-                                },
-                            },
-                        });
-                    }
-                }
-            }
+        // Skip matches in the defining document's own definition line? No —
+        // the definition itself is a reference too.
+        for range in occurrences_in_text(&content, &word) {
+            locations.push(Location {
+                uri: doc_uri.clone(),
+                range,
+            });
         }
     }
 

@@ -1,20 +1,14 @@
-; Indentation rules for Cadence SKILL (Lisp-style bracket indentation)
+; Indentation for Cadence SKILL — Zed derives both auto-indent and code
+; folding from these ranges (Zed uses @indent/@end captures).
 
-[
+(_
   "("
+  ")" @end) @indent
+
+(_
   "["
+  "]" @end) @indent
+
+(_
   "{"
-] @indent.begin
-
-[
-  ")"
-  "]"
-  "}"
-] @indent.end
-
-; Closing brackets at the start of a line dedent
-[
-  ")"
-  "]"
-  "}"
-] @outdent
+  "}" @end) @indent

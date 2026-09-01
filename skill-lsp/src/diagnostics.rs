@@ -15,7 +15,7 @@ pub async fn get_diagnostics(
         let doc = doc.read().await;
         let content = doc.rope.to_string();
 
-        check_syntax_errors(&content, &mut diagnostics);
+        check_unmatched_quotes(&content, &mut diagnostics);
         check_unbalanced_parens(&content, &mut diagnostics);
         check_common_mistakes(&content, &mut diagnostics);
     }
@@ -23,93 +23,120 @@ pub async fn get_diagnostics(
     diagnostics
 }
 
-fn check_syntax_errors(content: &str, diagnostics: &mut Vec<Diagnostic>) {
-    let lines: Vec<&str> = content.lines().collect();
-    let defun_re = regex::Regex::new(r"\((?:defun|procedure)\s+\(([^)]*)\)").unwrap();
+/// Char index of the char at `byte` offset within `line`.
+fn char_col(line: &str, byte: usize) -> usize {
+    line[..byte].chars().count()
+}
 
-    for (line_num, line) in lines.iter().enumerate() {
-        let trimmed = line.trim();
+fn is_escaped(line: &str, byte: usize) -> bool {
+    // Count consecutive backslashes immediately before `byte`; odd means escaped.
+    let bytes = line.as_bytes();
+    let mut n = 0;
+    let mut i = byte;
+    while i > 0 && bytes[i - 1] == b'\\' {
+        n += 1;
+        i -= 1;
+    }
+    n % 2 == 1
+}
 
-        if (trimmed.starts_with("(defun") || trimmed.starts_with("(procedure"))
-            && !defun_re.is_match(trimmed)
-            && !trimmed.ends_with(')')
-        {
-            continue;
+/// Byte offset of the `;` starting a line comment outside strings, if any.
+fn line_comment_start(line: &str) -> Option<usize> {
+    let mut in_string = false;
+    for (i, c) in line.char_indices() {
+        match c {
+            '"' if !is_escaped(line, i) => in_string = !in_string,
+            ';' if !in_string => return Some(i),
+            _ => {}
         }
+    }
+    None
+}
 
-        let quote_count = trimmed.matches('"').count();
-        if quote_count % 2 != 0 {
-            let mut in_string = false;
-            let mut last_pos = 0;
-            for (pos, c) in trimmed.char_indices() {
-                if c == '"' && (pos == 0 || trimmed.as_bytes()[pos - 1] != b'\\') {
-                    in_string = !in_string;
-                    last_pos = pos;
-                }
+fn check_unmatched_quotes(content: &str, diagnostics: &mut Vec<Diagnostic>) {
+    for (line_num, line) in content.lines().enumerate() {
+        let code_end = line_comment_start(line).unwrap_or(line.len());
+        let code = &line[..code_end];
+
+        let mut in_string = false;
+        let mut last_quote = None;
+        for (i, c) in code.char_indices() {
+            if c == '"' && !is_escaped(code, i) {
+                in_string = !in_string;
+                last_quote = Some(i);
             }
-            if in_string {
-                diagnostics.push(Diagnostic {
-                    range: Range {
-                        start: Position {
-                            line: line_num as u32,
-                            character: last_pos as u32,
-                        },
-                        end: Position {
-                            line: line_num as u32,
-                            character: (last_pos + 1) as u32,
-                        },
+        }
+        // SKILL strings cannot span lines: an odd quote is always an error.
+        if in_string {
+            let Some(q) = last_quote else { continue };
+            diagnostics.push(Diagnostic {
+                range: Range {
+                    start: Position {
+                        line: line_num as u32,
+                        character: char_col(line, q) as u32,
                     },
-                    severity: Some(DiagnosticSeverity::ERROR),
-                    source: Some("skill-lsp".to_string()),
-                    message: "Unmatched string quote".to_string(),
-                    ..Default::default()
-                });
-            }
+                    end: Position {
+                        line: line_num as u32,
+                        character: char_col(line, q) as u32 + 1,
+                    },
+                },
+                severity: Some(DiagnosticSeverity::ERROR),
+                source: Some("skill-lsp".to_string()),
+                message: "Unmatched string quote".to_string(),
+                ..Default::default()
+            });
         }
     }
 }
 
 fn check_unbalanced_parens(content: &str, diagnostics: &mut Vec<Diagnostic>) {
-    let mut stack: Vec<(usize, usize)> = Vec::new();
-    let mut in_string = false;
+    let mut stack: Vec<(usize, usize)> = Vec::new(); // (line, char col)
+    let mut in_block_comment = false;
 
     for (line_num, line) in content.lines().enumerate() {
-        let mut in_comment = false;
-        for (col, c) in line.char_indices() {
-            if in_comment {
-                break;
-            }
+        let mut in_string = false; // strings cannot span lines in SKILL
+        let mut chars = line.char_indices().peekable();
 
-            match c {
-                ';' if !in_string => in_comment = true,
-                '"' if !in_string => in_string = true,
-                '"' if in_string => {
-                    if col > 0 && line.as_bytes()[col - 1] != b'\\' {
-                        in_string = false;
-                    }
+        while let Some((i, c)) = chars.next() {
+            if in_block_comment {
+                if c == '*' && chars.peek().map(|&(_, nc)| nc == '/') == Some(true) {
+                    chars.next(); // consume '/'
+                    in_block_comment = false;
                 }
-                '(' if !in_string => stack.push((line_num, col)),
-                ')' if !in_string => {
-                    if stack.is_empty() {
-                        diagnostics.push(Diagnostic {
-                            range: Range {
-                                start: Position {
-                                    line: line_num as u32,
-                                    character: col as u32,
-                                },
-                                end: Position {
-                                    line: line_num as u32,
-                                    character: (col + 1) as u32,
-                                },
+                continue;
+            }
+            if in_string {
+                if c == '"' && !is_escaped(line, i) {
+                    in_string = false;
+                }
+                continue;
+            }
+            match c {
+                ';' => break, // line comment
+                '"' => in_string = true,
+                '/' if chars.peek().map(|&(_, nc)| nc == '*') == Some(true) => {
+                    chars.next(); // consume '*'
+                    in_block_comment = true;
+                }
+                '(' => stack.push((line_num, char_col(line, i))),
+                ')' if stack.pop().is_none() => {
+                    let col = char_col(line, i);
+                    diagnostics.push(Diagnostic {
+                        range: Range {
+                            start: Position {
+                                line: line_num as u32,
+                                character: col as u32,
                             },
-                            severity: Some(DiagnosticSeverity::ERROR),
-                            source: Some("skill-lsp".to_string()),
-                            message: "Unexpected closing parenthesis".to_string(),
-                            ..Default::default()
-                        });
-                    } else {
-                        stack.pop();
-                    }
+                            end: Position {
+                                line: line_num as u32,
+                                character: col as u32 + 1,
+                            },
+                        },
+                        severity: Some(DiagnosticSeverity::ERROR),
+                        source: Some("skill-lsp".to_string()),
+                        message: "Unexpected closing parenthesis".to_string(),
+                        ..Default::default()
+                    });
                 }
                 _ => {}
             }
@@ -125,7 +152,7 @@ fn check_unbalanced_parens(content: &str, diagnostics: &mut Vec<Diagnostic>) {
                 },
                 end: Position {
                     line: line as u32,
-                    character: (col + 1) as u32,
+                    character: col as u32 + 1,
                 },
             },
             severity: Some(DiagnosticSeverity::ERROR),
@@ -137,30 +164,36 @@ fn check_unbalanced_parens(content: &str, diagnostics: &mut Vec<Diagnostic>) {
 }
 
 fn check_common_mistakes(content: &str, diagnostics: &mut Vec<Diagnostic>) {
-    let lines: Vec<&str> = content.lines().collect();
+    let misspellings = [("deffun", "defun")];
+    let deprecated = [("stringLength", "strlen")];
 
-    for (line_num, line) in lines.iter().enumerate() {
-        let trimmed = line.trim();
-
-        let misspellings = [
-            ("deffun", "defun"),
-            ("progn", "progn"),
-            ("setf", "setq"),
-            ("defmacro", "defun"),
-        ];
+    for (line_num, line) in content.lines().enumerate() {
+        let code_end = line_comment_start(line).unwrap_or(line.len());
+        let code = &line[..code_end];
 
         for (wrong, correct) in misspellings.iter() {
-            if trimmed.contains(wrong) {
-                if let Some(pos) = trimmed.find(wrong) {
+            for (byte, _) in code.match_indices(wrong) {
+                let before_ok = byte == 0
+                    || !code[..byte]
+                        .chars()
+                        .last()
+                        .is_some_and(|c| c.is_alphanumeric() || c == '-' || c == '_');
+                let end = byte + wrong.len();
+                let after_ok = code[end..]
+                    .chars()
+                    .next()
+                    .is_none_or(|c| !(c.is_alphanumeric() || c == '-' || c == '_'));
+                if before_ok && after_ok {
+                    let col = char_col(line, byte);
                     diagnostics.push(Diagnostic {
                         range: Range {
                             start: Position {
                                 line: line_num as u32,
-                                character: pos as u32,
+                                character: col as u32,
                             },
                             end: Position {
                                 line: line_num as u32,
-                                character: (pos + wrong.len()) as u32,
+                                character: col as u32 + wrong.chars().count() as u32,
                             },
                         },
                         severity: Some(DiagnosticSeverity::WARNING),
@@ -172,32 +205,25 @@ fn check_common_mistakes(content: &str, diagnostics: &mut Vec<Diagnostic>) {
             }
         }
 
-        let deprecated = [
-            ("stringLength", "strlen"),
-            ("stringToSymbol", "stringToSymbol"),
-            ("symbolToString", "symbolToString"),
-        ];
-
         for (old, new) in deprecated.iter() {
-            if trimmed.contains(old) {
-                if let Some(pos) = trimmed.find(old) {
-                    diagnostics.push(Diagnostic {
-                        range: Range {
-                            start: Position {
-                                line: line_num as u32,
-                                character: pos as u32,
-                            },
-                            end: Position {
-                                line: line_num as u32,
-                                character: (pos + old.len()) as u32,
-                            },
+            if let Some(byte) = code.find(old) {
+                let col = char_col(line, byte);
+                diagnostics.push(Diagnostic {
+                    range: Range {
+                        start: Position {
+                            line: line_num as u32,
+                            character: col as u32,
                         },
-                        severity: Some(DiagnosticSeverity::HINT),
-                        source: Some("skill-lsp".to_string()),
-                        message: format!("Consider using '{}' instead", new),
-                        ..Default::default()
-                    });
-                }
+                        end: Position {
+                            line: line_num as u32,
+                            character: col as u32 + old.chars().count() as u32,
+                        },
+                    },
+                    severity: Some(DiagnosticSeverity::HINT),
+                    source: Some("skill-lsp".to_string()),
+                    message: format!("Consider using '{}' instead", new),
+                    ..Default::default()
+                });
             }
         }
     }
@@ -235,6 +261,48 @@ pub async fn format_document(
     edits
 }
 
+/// Count parens outside strings and comments on a single line.
+fn count_parens_outside_strings(line: &str) -> (usize, usize) {
+    let code_end = line_comment_start(line).unwrap_or(line.len());
+    let code = &line[..code_end];
+    let mut open = 0;
+    let mut close = 0;
+    let mut in_string = false;
+    let mut in_block = false;
+    let chars: Vec<(usize, char)> = code.char_indices().collect();
+    let mut idx = 0;
+    while idx < chars.len() {
+        let (i, c) = chars[idx];
+        if in_block {
+            if c == '*' && chars.get(idx + 1).map(|&(_, nc)| nc) == Some('/') {
+                in_block = false;
+                idx += 1;
+            }
+            idx += 1;
+            continue;
+        }
+        if in_string {
+            if c == '"' && !is_escaped(code, i) {
+                in_string = false;
+            }
+            idx += 1;
+            continue;
+        }
+        match c {
+            '"' => in_string = true,
+            '/' if chars.get(idx + 1).map(|&(_, nc)| nc) == Some('*') => {
+                in_block = true;
+                idx += 1;
+            }
+            '(' => open += 1,
+            ')' => close += 1,
+            _ => {}
+        }
+        idx += 1;
+    }
+    (open, close)
+}
+
 fn format_skill_code(content: &str) -> String {
     let mut result = String::new();
     let mut indent_level: i32 = 0;
@@ -242,9 +310,7 @@ fn format_skill_code(content: &str) -> String {
 
     for line in content.lines() {
         let trimmed = line.trim();
-
-        let open_count = trimmed.matches('(').count();
-        let close_count = trimmed.matches(')').count();
+        let (open_count, close_count) = count_parens_outside_strings(trimmed);
 
         if close_count > open_count {
             indent_level = indent_level.saturating_sub(1);

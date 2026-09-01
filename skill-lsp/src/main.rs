@@ -48,6 +48,8 @@ impl LanguageServer for Backend {
         tracing::info!("SKILL LSP server initializing...");
 
         let capabilities = ServerCapabilities {
+            // Negotiate UTF-8 offsets: our handlers index lines by chars.
+            position_encoding: Some(PositionEncodingKind::UTF8),
             text_document_sync: Some(TextDocumentSyncCapability::Options(
                 TextDocumentSyncOptions {
                     open_close: Some(true),
@@ -156,6 +158,11 @@ impl LanguageServer for Backend {
 
     async fn did_close(&self, params: DidCloseTextDocumentParams) {
         self.documents.remove(&params.text_document.uri);
+        let uri = params.text_document.uri;
+        self.symbol_table
+            .write()
+            .await
+            .retain(|_, info| info.location.uri != uri);
     }
 
     async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {

@@ -19,7 +19,7 @@
   "procedure": {
     "prefix": "procedure",
     "body": [
-      "(procedure (${1:funcName} ${2:params})",
+      "(procedure ${1:funcName} (${2:params})",
       "  ${3:body})"
     ],
     "description": "Define a procedure"
@@ -65,14 +65,6 @@
       "  ${3:else})"
     ],
     "description": "Conditional expression"
-  },
-  "else": {
-    "prefix": "else",
-    "body": [
-      "(else",
-      "  ${1:body})"
-    ],
-    "description": "Else clause"
   },
   "foreach": {
     "prefix": "foreach",

@@ -9,7 +9,7 @@
 
 ; ---- Strings ----
 (string) @string
-(escape_sequence) @escape
+(escape_sequence) @string.escape
 
 ; ---- Numbers ----
 (number) @number
@@ -18,7 +18,7 @@
 (character) @constant
 
 ; ---- Keyword arguments (?key ?count) ----
-((keyword) @special)
+((keyword) @variable.special)
 
 ; ---- Booleans (t / nil) ----
 ((boolean) @constant.builtin)

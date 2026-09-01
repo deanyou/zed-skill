@@ -16,7 +16,7 @@ version = "0.7.0"
 
 [grammars.skill]
 repository = "https://github.com/deanyou/zed-skill"
-rev = "main"
+rev = "082f7fc177e39b912a67aa1ab38ed64b7ee84a33"
 path = "tree-sitter-skill"
 
 [language_servers.skill-lsp]

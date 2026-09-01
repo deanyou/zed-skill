@@ -45,15 +45,16 @@ jobs:
       - name: Package (unix)
         if: runner.os != 'Windows'
         run: |
-          cp skill-lsp/target/${{ matrix.target }}/release/${{ matrix.bin }} skill-lsp-${{ matrix.bin }}
-          tar czf ${{ matrix.archive }} skill-lsp-${{ matrix.bin }}
-          shasum -a 256 ${{ matrix.archive }} >> checksums.txt
+          cp skill-lsp/target/${{ matrix.target }}/release/${{ matrix.bin }} ${{ matrix.bin }}
+          tar czf ${{ matrix.archive }} ${{ matrix.bin }}
+          sha256sum ${{ matrix.archive }} > ${{ matrix.archive }}.sha256
       - name: Package (windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          Copy-Item skill-lsp/target/${{ matrix.target }}/release/${{ matrix.bin }} skill-lsp-${{ matrix.bin }}
-          Compress-Archive -Path skill-lsp-${{ matrix.bin }} -DestinationPath ${{ matrix.archive }}
+          Copy-Item skill-lsp/target/${{ matrix.target }}/release/${{ matrix.bin }} ${{ matrix.bin }}
+          Compress-Archive -Path ${{ matrix.bin }} -DestinationPath ${{ matrix.archive }}
+          (Get-FileHash ${{ matrix.archive }} -Algorithm SHA256).Hash.ToLower() + "  ${{ matrix.archive }}" | Out-File -Encoding ascii ${{ matrix.archive }}.sha256
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -73,4 +74,5 @@ jobs:
           files: |
             skill-lsp-*.tar.gz
             skill-lsp-*.zip
+            *.sha256
           generate_release_notes: true
